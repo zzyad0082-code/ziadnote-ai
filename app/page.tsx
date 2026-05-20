@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf";
+import * as pdfjsLib from "pdfjs-dist";
 
-// ✅ worker في المتصفح فقط
+// ✅ Worker في المتصفح فقط
 if (typeof window !== "undefined") {
   pdfjsLib.GlobalWorkerOptions.workerSrc =
-    `//cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js`;
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js";
 }
 
 export default function Home() {
@@ -17,6 +17,7 @@ export default function Home() {
   const [quiz, setQuiz] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // 🔥 PDF extraction (safe for SSR)
   async function extractPDFText(file: File) {
     if (typeof window === "undefined") return "";
 
@@ -42,7 +43,7 @@ export default function Home() {
 
       return text;
     } catch (error) {
-      console.log(error);
+      console.log("PDF Error:", error);
       return "";
     }
   }
@@ -74,21 +75,27 @@ export default function Home() {
       sourceText += "\n\n" + await extractFileText(file);
     }
 
-    const response = await fetch("/api/summary", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: sourceText }),
-    });
+    try {
+      const response = await fetch("/api/summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: sourceText }),
+      });
 
-    const data = await response.json();
+      const data = await response.json();
 
-    const result = data.result || "";
+      const result = data.result || "";
 
-    const summaryPart = result.split("# Quiz Questions")[0];
-    const quizPart = result.split("# Quiz Questions")[1];
+      const summaryPart = result.split("# Quiz Questions")[0];
+      const quizPart = result.split("# Quiz Questions")[1];
 
-    setSummary(summaryPart);
-    setQuiz(quizPart);
+      setSummary(summaryPart);
+      setQuiz(quizPart);
+    } catch (error) {
+      console.log(error);
+      setSummary("Error generating content");
+      setQuiz("");
+    }
 
     setLoading(false);
   }
@@ -97,6 +104,7 @@ export default function Home() {
     <div className="min-h-screen bg-black text-white p-8">
       <div className="max-w-7xl mx-auto">
 
+        {/* HEADER */}
         <div className="flex items-center justify-between mb-16">
           <h1 className="text-4xl font-bold">ZiadNote AI</h1>
 
@@ -143,6 +151,7 @@ export default function Home() {
               </label>
             </div>
 
+            {/* FILE LIST */}
             {sourceFileNames.map((name, i) => (
               <p key={i}>{name}</p>
             ))}
@@ -186,6 +195,7 @@ export default function Home() {
           </div>
 
         </section>
+
       </div>
     </div>
   );
