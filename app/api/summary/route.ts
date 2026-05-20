@@ -1,36 +1,36 @@
 import Groq from "groq-sdk";
 
+export const runtime = "nodejs"; // مهم جدًا لـ Vercel
+
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
 export async function POST(req: Request) {
-
   try {
+    const body = await req.json().catch(() => ({}));
 
-    const body = await req.json();
+    const text = body?.text || "";
+    const examText = body?.examText || "";
 
-    const text = body.text;
-
-    const examText = body.examText;
+    if (!text) {
+      return Response.json({
+        result: "No input text provided",
+      });
+    }
 
     let prompt = "";
 
+    // ===================== EXAM MODE =====================
     if (examText) {
-
       prompt = `
-
 You are an AI exam solving assistant.
 
-You have source material and an exam.
+Rules:
+- Use ONLY the source material.
+- If answer not found, say: "Answer not found in source."
 
-Your task:
-- Answer all exam questions using ONLY the source material.
-- Be accurate and educational.
-- If the answer does not exist in source material say:
-"Answer not found in source."
-
-FORMAT:
+Format:
 
 # Exam Answers
 
@@ -45,41 +45,32 @@ ${text}
 
 EXAM:
 ${examText}
-
 `;
+    }
 
-    } else {
-
+    // ===================== STUDY MODE =====================
+    else {
       prompt = `
-
 You are an AI study assistant.
 
-Your task:
-
-1- Create a short and clean summary.
-
-2- Create exactly 10 multiple choice quiz questions.
+Tasks:
+1. Write a simple summary.
+2. Create exactly 10 multiple-choice questions.
 
 Rules:
-- Every question must have:
-a)
-b)
-c)
+- Each question must have a, b, c options.
+- Add correct answer at the end.
 
-- Add the correct answer after each question.
-
-- Make the questions clear and educational.
-
-FORMAT:
+Format:
 
 # Summary
 
-summary here
+...
 
 # Quiz Questions
 
 1.
-Question here
+Question
 
 a)
 b)
@@ -89,43 +80,30 @@ Answer:
 
 TEXT:
 ${text}
-
 `;
-
     }
 
-    const chatCompletion =
-      await groq.chat.completions.create({
-
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-
-        model: "llama-3.3-70b-versatile",
-
-      });
+    const chatCompletion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.7,
+    });
 
     return Response.json({
-
       result:
-        chatCompletion.choices[0]?.message?.content
-        || "No AI response",
-
+        chatCompletion.choices[0]?.message?.content ||
+        "No AI response",
     });
-
   } catch (error) {
-
-    console.log(error);
+    console.error("API Error:", error);
 
     return Response.json({
-
-      result: "AI Error",
-
+      result: "AI Error occurred",
     });
-
   }
-
 }
