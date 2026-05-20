@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf";
+import * as pdfjsLib from "pdfjs-dist";
 
-// ✅ تشغيل الـ worker في المتصفح فقط
+// ✅ Worker في المتصفح فقط
 if (typeof window !== "undefined") {
   pdfjsLib.GlobalWorkerOptions.workerSrc =
-    `//cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js`;
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js";
 }
 
 export default function ExamPage() {
@@ -18,30 +18,35 @@ export default function ExamPage() {
   const [examAnswers, setExamAnswers] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // 🔥 مهم: حماية من السيرفر
+  // 🔥 منع السيرفر نهائيًا
   async function extractPDFText(file: File) {
     if (typeof window === "undefined") return "";
 
-    const arrayBuffer = await file.arrayBuffer();
+    try {
+      const arrayBuffer = await file.arrayBuffer();
 
-    const pdf = await pdfjsLib.getDocument({
-      data: arrayBuffer,
-    }).promise;
+      const pdf = await pdfjsLib.getDocument({
+        data: arrayBuffer,
+      }).promise;
 
-    let text = "";
+      let text = "";
 
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
 
-      const strings = content.items.map((item: any) =>
-        "str" in item ? item.str : ""
-      );
+        const strings = content.items.map((item: any) =>
+          "str" in item ? item.str : ""
+        );
 
-      text += strings.join(" ");
+        text += strings.join(" ");
+      }
+
+      return text;
+    } catch (error) {
+      console.log("PDF Error:", error);
+      return "";
     }
-
-    return text;
   }
 
   async function extractFileText(file: File) {
@@ -81,20 +86,25 @@ export default function ExamPage() {
       examText += "\n\n" + await extractFileText(file);
     }
 
-    const response = await fetch("/api/summary", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        text: sourceText,
-        examText,
-      }),
-    });
+    try {
+      const response = await fetch("/api/summary", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: sourceText,
+          examText,
+        }),
+      });
 
-    const data = await response.json();
+      const data = await response.json();
+      setExamAnswers(data.result || "No result");
+    } catch (error) {
+      console.log(error);
+      setExamAnswers("Error solving exam");
+    }
 
-    setExamAnswers(data.result);
     setLoading(false);
   }
 
